@@ -10,6 +10,7 @@ create table if not exists editais (
   palavras_chave   text[],
   nivel            text check (nivel in ('federal','estadual','municipal')),
   fonte            text default 'LexML',
+  status           text default 'aberto' check (status in ('aberto','previsto','encerrado')),
   created_at       timestamptz default now()
 );
 

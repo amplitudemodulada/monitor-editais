@@ -29,6 +29,7 @@ export interface Edital {
   palavras_chave: string[]
   nivel: 'federal' | 'estadual' | 'municipal'
   fonte: string
+  status: 'aberto' | 'previsto' | 'encerrado'
   created_at?: string
 }
 
