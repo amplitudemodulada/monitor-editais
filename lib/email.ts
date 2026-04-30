@@ -1,8 +1,7 @@
 import { Resend } from 'resend'
 import type { Edital } from './supabase'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM   = 'Monitor de Editais <alertas@msdosinformatica.com.br>'
+const FROM = 'Monitor de Editais <alertas@msdosinformatica.com.br>'
 
 function corCategoria(cat: string) {
   const cores: Record<string, string> = {
@@ -67,6 +66,7 @@ export async function enviarAlertaEmail(
   editais: Edital[]
 ): Promise<boolean> {
   if (!editais.length) return false
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const { error } = await resend.emails.send({
     from:    FROM,
     to:      email,
