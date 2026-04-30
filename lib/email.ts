@@ -1,7 +1,19 @@
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 import type { Edital } from './supabase'
 
-const FROM = 'Monitor de Editais <alertas@msdosinformatica.com.br>'
+function getTransport() {
+  return nodemailer.createTransport({
+    host:   process.env.SMTP_HOST,
+    port:   Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  })
+}
+
+const FROM = process.env.SMTP_FROM || 'Monitor de Editais <alertas@msdosinformatica.com.br>'
 
 function corCategoria(cat: string) {
   const cores: Record<string, string> = {
@@ -42,13 +54,10 @@ function gerarHtml(nome: string, editais: Edital[]): string {
       <h1 style="color:#fff;margin:0;font-size:1.4rem;">📋 Monitor de Editais</h1>
       <p style="color:rgba(255,255,255,0.8);font-size:0.85rem;margin:0.35rem 0 0;">Olá, <strong>${nome}</strong>! Novos editais foram encontrados.</p>
     </div>
-
     <p style="color:#374151;font-size:0.9rem;margin-bottom:1.25rem;">
       Encontramos <strong>${editais.length} novo(s) edital(is)</strong> compatível(is) com seu perfil de interesse:
     </p>
-
     ${cards}
-
     <div style="border-top:1px solid #e5e7eb;margin-top:1.5rem;padding-top:1rem;text-align:center;">
       <p style="font-size:11px;color:#9ca3af;margin:0;">
         © ${new Date().getFullYear()} Msdos Informática Ltda &nbsp;·&nbsp;
@@ -66,13 +75,17 @@ export async function enviarAlertaEmail(
   editais: Edital[]
 ): Promise<boolean> {
   if (!editais.length) return false
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { error } = await resend.emails.send({
-    from:    FROM,
-    to:      email,
-    subject: `📋 ${editais.length} novo(s) edital(is) para você — ${new Date().toLocaleDateString('pt-BR')}`,
-    html:    gerarHtml(nome, editais),
-  })
-  if (error) console.error('Erro e-mail Resend:', error)
-  return !error
+  try {
+    const transport = getTransport()
+    await transport.sendMail({
+      from:    FROM,
+      to:      email,
+      subject: `📋 ${editais.length} novo(s) edital(is) para você — ${new Date().toLocaleDateString('pt-BR')}`,
+      html:    gerarHtml(nome, editais),
+    })
+    return true
+  } catch (err: any) {
+    console.error('Erro ao enviar e-mail:', err.message)
+    return false
+  }
 }
