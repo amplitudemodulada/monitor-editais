@@ -31,6 +31,16 @@ create table if not exists alertas_config (
 
 create unique index if not exists idx_alertas_email on alertas_config(email);
 
+-- Log de alertas enviados
+create table if not exists alertas_enviados (
+  id         uuid primary key default gen_random_uuid(),
+  edital_id  uuid references editais(id) on delete cascade,
+  email      text not null,
+  enviado_em timestamptz default now()
+);
+
+create index if not exists idx_alertas_enviados_email on alertas_enviados(email);
+
 -- Log de execuções do scraper
 create table if not exists scraper_log (
   id           uuid primary key default gen_random_uuid(),
