@@ -96,9 +96,12 @@ export default function Dashboard() {
       headers: { 'x-cron-secret': 'monitor_editais_2026' },
     })
     const data = await res.json()
-    const ins  = data.inseridos ?? data.totalInseridos ?? 0
-    const dup  = data.duplicados ?? data.totalDuplic ?? 0
-    setUltimaExec(`${ins} novos · ${dup} duplicados · ${new Date().toLocaleTimeString('pt-BR')}`)
+    if (!data.ok) {
+      setUltimaExec(`❌ Erro: ${data.erro || 'falha na coleta'} · ${new Date().toLocaleTimeString('pt-BR')}`)
+    } else {
+      const fontes = (data.relatorio || []).map((r: any) => `${r.fonte}: ${r.inseridos ?? 0} novos`).join(' · ')
+      setUltimaExec(`${data.totalInseridos} novos · ${data.totalDuplic} duplicados · ${new Date().toLocaleTimeString('pt-BR')}${fontes ? ' — ' + fontes : ''}`)
+    }
     setRodando(false)
     carregar()
   }
