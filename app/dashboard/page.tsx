@@ -70,8 +70,9 @@ export default function Dashboard() {
   const [nivel, setNivel]         = useState('Todos')
   const [fonte, setFonte]         = useState('Todas')
   const [busca, setBusca]         = useState('')
-  const [rodando, setRodando]     = useState(false)
-  const [ultimaExec, setUltimaExec] = useState('')
+  const [rodando, setRodando]         = useState(false)
+  const [carregandoHist, setCarregandoHist] = useState(false)
+  const [ultimaExec, setUltimaExec]   = useState('')
 
   const carregar = async () => {
     setLoading(true)
@@ -87,6 +88,18 @@ export default function Dashboard() {
     const data = await res.json()
     setEditais(data.editais || [])
     setLoading(false)
+  }
+
+  const carregarHistorico = async () => {
+    if (!confirm('Importar todos os editais de 2026 do DOU? Pode levar alguns minutos.')) return
+    setCarregandoHist(true)
+    const res  = await fetch('/api/historico?ano=2026&paginas=20', {
+      headers: { 'x-cron-secret': 'monitor_editais_2026' },
+    })
+    const data = await res.json()
+    setUltimaExec(`Histórico 2026: ${data.totalInseridos} importados · ${data.totalDuplic} já existiam · ${new Date().toLocaleTimeString('pt-BR')}`)
+    setCarregandoHist(false)
+    carregar()
   }
 
   const executarScraper = async () => {
@@ -131,6 +144,10 @@ export default function Dashboard() {
           <a href="/alertas" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', padding: '0.5rem 1rem', borderRadius: 8, textDecoration: 'none', fontSize: '0.875rem', fontWeight: 600 }}>
             🔔 Meus Alertas
           </a>
+          <button onClick={carregarHistorico} disabled={carregandoHist}
+            style={{ background: carregandoHist ? '#6b7280' : '#7c3aed', color: '#fff', border: 'none', padding: '0.6rem 1.25rem', borderRadius: 8, cursor: carregandoHist ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>
+            {carregandoHist ? '⏳ Importando...' : '📥 Histórico 2026'}
+          </button>
           <button onClick={executarScraper} disabled={rodando}
             style={{ background: rodando ? '#6b7280' : '#16a34a', color: '#fff', border: 'none', padding: '0.6rem 1.25rem', borderRadius: 8, cursor: rodando ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>
             {rodando ? '⏳ Coletando...' : '🔄 Coletar Agora'}

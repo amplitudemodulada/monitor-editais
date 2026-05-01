@@ -5,17 +5,22 @@ import { detectarCategoria, extrairOrgao, inferirNivel } from './classificador'
 
 const LEXML_URL = 'https://www.lexml.gov.br/busca/SRU'
 
-export async function buscarEditalLexml(pagina = 1): Promise<Edital[]> {
+// Busca editais do DOU filtrando por ano
+export async function buscarEditalLexml(pagina = 1, ano = new Date().getFullYear()): Promise<Edital[]> {
   const startRecord = (pagina - 1) * 20 + 1
+
+  // Filtra pelo ano corrente para pegar histórico de 2026
+  const query = `dc.type="edital" and dc.date >= "${ano}-01-01" and dc.date <= "${ano}-12-31"`
 
   const { data: xml } = await axios.get(LEXML_URL, {
     params: {
       operation:      'searchRetrieve',
       version:        '1.1',
-      query:          'dc.type="edital"',
+      query,
       maximumRecords: 20,
       startRecord,
       recordSchema:   'oai_dc',
+      sortKeys:       'dc.date,,0', // mais recentes primeiro
     },
     timeout: 5000,
   })
