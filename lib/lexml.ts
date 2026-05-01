@@ -17,7 +17,7 @@ export async function buscarEditalLexml(pagina = 1): Promise<Edital[]> {
       startRecord,
       recordSchema:   'oai_dc',
     },
-    timeout: 15000,
+    timeout: 5000,
   })
 
   const parsed  = await parseStringPromise(xml, { explicitArray: false })

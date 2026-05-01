@@ -1,57 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { buscarEditalLexml }     from '@/lib/lexml'
-import { scrapeTodasFontes }     from '@/lib/scrapers'
-import { supabase }              from '@/lib/supabase'
-import { processarAlertas }      from '@/lib/alertas'
-import type { Edital }           from '@/lib/supabase'
+import { buscarEditalLexml }  from '@/lib/lexml'
+import { scrapeTodasFontes } from '@/lib/scrapers'
+import { supabase }          from '@/lib/supabase'
+import { processarAlertas }  from '@/lib/alertas'
+import type { Edital }       from '@/lib/supabase'
 
-async function executarColeta() {
-  let totalInseridos = 0
-  let totalDuplic    = 0
-  let totalErros     = 0
-  const editaisNovos: Edital[] = []
-  const relatorio: any[]       = []
+export const maxDuration = 60 // Vercel Pro; no Hobby limita em 10s
 
-  async function salvar(lista: Edital[], fonte: string) {
-    let ins = 0, dup = 0, err = 0
-    for (const edital of lista) {
-      const { data, error } = await supabase
-        .from('editais')
-        .upsert(edital, { onConflict: 'url', ignoreDuplicates: true })
-        .select('id')
-      if (error)        { err++; continue }
-      if (data?.length) { ins++; editaisNovos.push({ ...edital, id: data[0].id }) }
-      else              { dup++ }
-    }
-    totalInseridos += ins; totalDuplic += dup; totalErros += err
-    relatorio.push({ fonte, coletados: lista.length, inseridos: ins, duplicados: dup, erros: err })
+async function salvarLote(lista: Edital[]) {
+  let inseridos = 0, duplicados = 0, erros = 0
+  const novos: Edital[] = []
+
+  for (const edital of lista) {
+    const { data, error } = await supabase
+      .from('editais')
+      .upsert(edital, { onConflict: 'url', ignoreDuplicates: true })
+      .select('id')
+    if (error)        { erros++;     continue }
+    if (data?.length) { inseridos++; novos.push({ ...edital, id: data[0].id }) }
+    else              { duplicados++ }
   }
-
-  // DOU via LexML
-  const lexmlEditais: Edital[] = []
-  for (let p = 1; p <= 3; p++) {
-    const pag = await buscarEditalLexml(p).catch(() => [])
-    lexmlEditais.push(...pag)
-  }
-  await salvar(lexmlEditais, 'DOU / LexML')
-
-  // Estratégia, Gran, Direção
-  const resultados = await scrapeTodasFontes()
-  for (const r of resultados) {
-    if (r.erro) { relatorio.push({ fonte: r.fonte, erro: r.erro }); continue }
-    await salvar(r.editais, r.fonte)
-  }
-
-  const alertasEnviados = await processarAlertas(editaisNovos).catch(() => 0)
-
-  try {
-    await supabase.from('scraper_log').insert({
-      inseridos: totalInseridos, duplicados: totalDuplic, erros: totalErros,
-      status: 'ok', fonte: 'multi',
-    })
-  } catch { /* ignora erro de log */ }
-
-  return { totalInseridos, totalDuplic, totalErros, alertasEnviados, relatorio }
+  return { inseridos, duplicados, erros, novos }
 }
 
 export async function POST(req: NextRequest) {
@@ -59,10 +28,65 @@ export async function POST(req: NextRequest) {
   if (secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ erro: 'Não autorizado' }, { status: 401 })
   }
+
+  const inicio = Date.now()
+
   try {
-    const inicio = Date.now()
-    const result = await executarColeta()
-    return NextResponse.json({ ok: true, ...result, duracaoMs: Date.now() - inicio, executadoEm: new Date().toISOString() })
+    // Tudo em paralelo — LexML (3 páginas simultâneas) + 3 sites ao mesmo tempo
+    const [lexmlResults, sitesResults] = await Promise.all([
+      Promise.allSettled([
+        buscarEditalLexml(1),
+        buscarEditalLexml(2),
+        buscarEditalLexml(3),
+      ]),
+      scrapeTodasFontes(),
+    ])
+
+    const lexmlEditais: Edital[] = lexmlResults.flatMap(r =>
+      r.status === 'fulfilled' ? r.value : []
+    )
+
+    // Salva tudo em paralelo por fonte
+    const [lexmlSalvo, ...sitesSalvos] = await Promise.all([
+      salvarLote(lexmlEditais),
+      ...sitesResults.map(r => salvarLote(r.editais)),
+    ])
+
+    const relatorio = [
+      { fonte: 'DOU / LexML', coletados: lexmlEditais.length, inseridos: lexmlSalvo.inseridos, duplicados: lexmlSalvo.duplicados, erros: lexmlSalvo.erros },
+      ...sitesResults.map((r, i) => ({
+        fonte: r.fonte,
+        coletados: r.editais.length,
+        inseridos: sitesSalvos[i].inseridos,
+        duplicados: sitesSalvos[i].duplicados,
+        erros: sitesSalvos[i].erros,
+        ...(r.erro ? { erro: r.erro } : {}),
+      })),
+    ]
+
+    const totalInseridos  = relatorio.reduce((s, r) => s + (r.inseridos  ?? 0), 0)
+    const totalDuplic     = relatorio.reduce((s, r) => s + (r.duplicados ?? 0), 0)
+    const totalErros      = relatorio.reduce((s, r) => s + (r.erros      ?? 0), 0)
+    const editaisNovos    = [lexmlSalvo, ...sitesSalvos].flatMap(r => r.novos)
+    const alertasEnviados = await processarAlertas(editaisNovos).catch(() => 0)
+
+    try {
+      await supabase.from('scraper_log').insert({
+        inseridos: totalInseridos, duplicados: totalDuplic,
+        erros: totalErros, status: 'ok', fonte: 'multi',
+      })
+    } catch { /* silencia erro de log */ }
+
+    return NextResponse.json({
+      ok: true,
+      totalInseridos,
+      totalDuplic,
+      totalErros,
+      alertasEnviados,
+      relatorio,
+      duracaoMs:   Date.now() - inicio,
+      executadoEm: new Date().toISOString(),
+    })
   } catch (err: any) {
     return NextResponse.json({ ok: false, erro: err.message }, { status: 500 })
   }
