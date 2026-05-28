@@ -1,25 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buscarEditalLexml }        from '@/lib/lexml'
 import { scrapeTodasFontes }        from '@/lib/scrapers'
-import { supabase }                 from '@/lib/supabase'
+import { salvarEditaisLote, salvarScraperLog } from '@/lib/storage'
 import { processarAlertas }         from '@/lib/alertas'
 import { atualizarStatusEditais }   from '@/lib/atualizar-status'
-import type { Edital } from '@/lib/supabase'
+import type { Edital } from '@/lib/storage'
 
-const TEMPO_LIMITE_MS = 8000 // Vercel Hobby: 10s, deixando margem
+const TEMPO_LIMITE_MS = 8000
 
 async function salvarEditais(lista: Edital[], fonte: string) {
-  let ins = 0, dup = 0, err = 0
-  for (const edital of lista) {
-    const { data, error } = await supabase
-      .from('editais')
-      .upsert(edital, { onConflict: 'url', ignoreDuplicates: true })
-      .select('id')
-    if (error)        { err++; continue }
-    if (data?.length) { ins++ }
-    else              { dup++ }
-  }
-  return { fonte, coletados: lista.length, inseridos: ins, duplicados: dup, erros: err }
+  const r = salvarEditaisLote(lista, fonte)
+  return { fonte, coletados: lista.length, inseridos: r.inseridos, duplicados: r.duplicados, erros: r.erros }
 }
 
 export async function GET(req: NextRequest) {
@@ -38,7 +29,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1 — DOU via LexML (1 página por vez, respeitando limite)
     const lexmlEditais: Edital[] = []
     for (let p = 1; p <= 3; p++) {
       if (!(await dentroDoLimite())) { statusFinal = 'parcial'; break }
@@ -51,7 +41,6 @@ export async function GET(req: NextRequest) {
       relatorio.push(r)
     }
 
-    // 2 — Fontes (uma por vez, cada uma com timeout individual)
     if (await dentroDoLimite()) {
       const resultados = await scrapeTodasFontes()
       for (const r of resultados) {
@@ -65,7 +54,6 @@ export async function GET(req: NextRequest) {
       statusFinal = 'parcial'
     }
 
-    // 3 — Status e alertas (se houver tempo)
     let statusAtualizados = 0
     if (await dentroDoLimite()) {
       const r = await atualizarStatusEditais(20).catch(() => ({ atualizados: 0 }))
@@ -77,15 +65,14 @@ export async function GET(req: NextRequest) {
       alertasEnviados = await processarAlertas(todosNovos).catch(() => 0)
     }
 
-    // 4 — Log
     const totalInseridos = relatorio.reduce((s, r) => s + (r.inseridos ?? 0), 0)
     const totalDuplic    = relatorio.reduce((s, r) => s + (r.duplicados ?? 0), 0)
     const totalErros     = relatorio.reduce((s, r) => s + (r.erros ?? 0), 0)
 
-    await supabase.from('scraper_log').insert({
+    salvarScraperLog({
       inseridos: totalInseridos, duplicados: totalDuplic,
       erros: totalErros, status: statusFinal, fonte: 'multi',
-    }).catch(() => {})
+    })
 
     return NextResponse.json({
       ok: true,
@@ -97,12 +84,12 @@ export async function GET(req: NextRequest) {
       executadoEm: new Date().toISOString(),
     })
   } catch (err: any) {
-    await supabase.from('scraper_log').insert({
+    salvarScraperLog({
       inseridos: relatorio.reduce((s, r) => s + (r.inseridos ?? 0), 0),
       duplicados: relatorio.reduce((s, r) => s + (r.duplicados ?? 0), 0),
       erros: relatorio.reduce((s, r) => s + (r.erros ?? 0), 0) + 1,
       status: 'erro', fonte: 'multi',
-    }).catch(() => {})
+    })
     return NextResponse.json({ ok: false, erro: err.message }, { status: 500 })
   }
 }

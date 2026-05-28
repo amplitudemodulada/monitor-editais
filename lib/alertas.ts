@@ -1,6 +1,6 @@
-import { supabase } from './supabase'
 import { enviarAlertaEmail } from './email'
-import type { Edital, AlertaConfig } from './supabase'
+import { carregarAlertasConfig, salvarAlertasEnviados } from './storage'
+import type { Edital, AlertaConfig } from './storage'
 
 function editalMatchConfig(edital: Edital, config: AlertaConfig): boolean {
   if (!config.ativo) return false
@@ -22,23 +22,20 @@ function editalMatchConfig(edital: Edital, config: AlertaConfig): boolean {
 export async function processarAlertas(editaisNovos: Edital[]): Promise<number> {
   if (!editaisNovos.length) return 0
 
-  const { data: configs } = await supabase
-    .from('alertas_config')
-    .select('*')
-    .eq('ativo', true)
+  const configs = carregarAlertasConfig().filter(c => c.ativo)
 
-  if (!configs?.length) return 0
+  if (!configs.length) return 0
 
   let enviados = 0
 
-  for (const config of configs as AlertaConfig[]) {
+  for (const config of configs) {
     const compatíveis = editaisNovos.filter(e => editalMatchConfig(e, config))
     if (!compatíveis.length) continue
 
     const ok = await enviarAlertaEmail(config.email, config.nome || 'Usuário', compatíveis)
     if (ok) {
       enviados++
-      await supabase.from('alertas_enviados').insert(
+      salvarAlertasEnviados(
         compatíveis.map(e => ({
           edital_id: e.id,
           email:     config.email,

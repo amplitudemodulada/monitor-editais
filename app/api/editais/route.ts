@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { carregarEditais } from '@/lib/storage'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -9,40 +9,18 @@ export async function GET(req: NextRequest) {
   const fonte     = searchParams.get('fonte')
   const banca     = searchParams.get('banca')
   const q         = searchParams.get('q')
-  const limit     = Number(searchParams.get('limit') || 100)
+  const limit     = Number(searchParams.get('limit') || 200)
 
-  let query = supabase
-    .from('editais')
-    .select('*')
-    .order('data_publicacao', { ascending: false })
-    .limit(limit)
+  let editais = carregarEditais()
 
-  if (categoria) query = query.eq('categoria', categoria)
-  if (nivel)     query = query.eq('nivel', nivel)
-  if (status)    query = query.eq('status', status)
-  if (fonte)     query = query.eq('fonte', fonte)
-  if (q)         query = query.ilike('titulo', `%${q}%`)
+  if (categoria) editais = editais.filter(e => e.categoria === categoria)
+  if (nivel)     editais = editais.filter(e => e.nivel === nivel)
+  if (status)    editais = editais.filter(e => e.status === status)
+  if (fonte)     editais = editais.filter(e => e.fonte === fonte)
+  if (banca)     editais = editais.filter(e => e.banca === banca)
+  if (q)         editais = editais.filter(e => e.titulo.toLowerCase().includes(q.toLowerCase()))
 
-  // Tenta com filtro de banca; se falhar, tenta sem e faz o filtro em memória
-  const montarQuery = (comBanca: boolean) => {
-    let q2 = supabase.from('editais').select('*')
-    if (comBanca && banca) q2 = q2.eq('banca', banca)
-    if (categoria) q2 = q2.eq('categoria', categoria)
-    if (nivel)     q2 = q2.eq('nivel', nivel)
-    if (status)    q2 = q2.eq('status', status)
-    if (fonte)     q2 = q2.eq('fonte', fonte)
-    if (q)         q2 = q2.ilike('titulo', `%${q}%`)
-    return q2.order('data_publicacao', { ascending: false }).limit(limit)
-  }
+  editais.sort((a, b) => new Date(b.data_publicacao).getTime() - new Date(a.data_publicacao).getTime())
 
-  let { data, error } = await montarQuery(true)
-  if (error && banca) {
-    // Coluna banca não existe → busca sem ela e filtra em memória
-    const r2   = await montarQuery(false)
-    error = r2.error
-    data  = r2.data ? r2.data.filter((e: any) => e.banca === banca) : null
-  }
-
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 })
-  return NextResponse.json({ editais: data, total: data?.length ?? 0 })
+  return NextResponse.json({ editais: editais.slice(0, limit), total: editais.length })
 }

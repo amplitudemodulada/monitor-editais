@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer'
-import type { Edital } from './supabase'
+import type { Edital } from './storage'
 
 function getTransport() {
   return nodemailer.createTransport({

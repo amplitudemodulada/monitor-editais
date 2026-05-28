@@ -5,10 +5,6 @@ on:
     - cron: '0 11 * * *'
   workflow_dispatch:
 
-env:
-  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
 jobs:
   coleta:
     runs-on: ubuntu-latest
@@ -20,3 +16,22 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx tsx scripts/coleta.ts
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      - name: Commit data
+        run: |
+          git config user.name "monitor-editais-bot"
+          git config user.email "bot@monitor-editais"
+          git add public/data/
+          if git diff --cached --quiet; then
+            echo "Sem alterações nos dados"
+          else
+            git commit -m "chore: atualiza dados da coleta [skip ci]"
+            git push
+          fi

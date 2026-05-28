@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { parseStringPromise } from 'xml2js'
-import type { Edital } from './supabase'
+import type { Edital } from './storage'
 import { detectarCategoria, extrairOrgao, inferirNivel } from './classificador'
 
 const LEXML_URL = 'https://www.lexml.gov.br/busca/SRU'
