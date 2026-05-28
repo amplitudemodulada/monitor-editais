@@ -3,11 +3,11 @@ import { buscarEditalLexml }        from '@/lib/lexml'
 import { scrapeTodasFontes }        from '@/lib/scrapers'
 import { supabase }                 from '@/lib/supabase'
 import { processarAlertas }         from '@/lib/alertas'
+import { atualizarStatusEditais }   from '@/lib/atualizar-status'
 import type { Edital }              from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
-  const auth   = req.headers.get('authorization') ?? ''
-  const secret = auth.replace('Bearer ', '')
+  const secret = req.headers.get('x-cron-secret') ?? ''
   if (secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ erro: 'Não autorizado' }, { status: 401 })
   }
@@ -50,7 +50,10 @@ export async function GET(req: NextRequest) {
       await salvarEditais(r.editais, r.fonte)
     }
 
-    // 3 — Alertas por e-mail
+    // 3 — Atualiza status dos editais com banca
+    const { atualizados: statusAtualizados } = await atualizarStatusEditais(20).catch(() => ({ atualizados: 0 }))
+
+    // 4 — Alertas por e-mail
     const alertasEnviados = await processarAlertas(editaisNovos)
 
     // 4 — Log

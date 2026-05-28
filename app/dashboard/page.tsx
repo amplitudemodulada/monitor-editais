@@ -12,17 +12,20 @@ interface Edital {
   resumo: string
   nivel: string
   fonte: string
-  status: 'aberto' | 'previsto' | 'encerrado'
+  banca: string
+  status: 'aberto' | 'previsto' | 'encerrado' | 'em_andamento'
 }
 
 const CATEGORIAS = ['Todas', 'TI / Tecnologia', 'Saúde', 'Educação', 'Administrativo', 'Jurídico', 'Engenharia', 'Segurança Pública', 'Fiscal / Receita', 'Concurso Militar', 'Geral']
 const NIVEIS     = ['Todos', 'federal', 'estadual', 'municipal']
-const FONTES     = ['Todas', 'DOU / LexML', 'Estratégia Concursos', 'Gran Cursos Online', 'Direção Concursos']
+const FONTES     = ['Todas', 'DOU / LexML', 'Estratégia Concursos', 'Gran Cursos Online', 'Direção Concursos', 'IBAM Concursos']
+const BANCAS     = ['Todas', 'FGV', 'CEBRASPE', 'FCC', 'VUNESP', 'IDCAP', 'IDECAN', 'IBAM']
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  aberto:    { bg: '#dcfce7', color: '#166534', label: '🟢 Aberto'   },
-  previsto:  { bg: '#fef9c3', color: '#713f12', label: '🟡 Previsto' },
-  encerrado: { bg: '#f3f4f6', color: '#6b7280', label: '⚪ Encerrado' },
+  aberto:       { bg: '#dcfce7', color: '#166534', label: '🟢 Aberto'      },
+  previsto:     { bg: '#fef9c3', color: '#713f12', label: '🟡 Previsto'    },
+  em_andamento: { bg: '#dbeafe', color: '#1e40af', label: '🔵 Em Andamento' },
+  encerrado:    { bg: '#f3f4f6', color: '#6b7280', label: '⚪ Encerrado'   },
 }
 
 const FONTE_ICONE: Record<string, string> = {
@@ -62,17 +65,36 @@ function TabBtn({ label, ativo, count, onClick }: { label: string; ativo: boolea
   )
 }
 
+interface CronogramaEvento {
+  evento: string
+  data?: string
+  tipo: string
+  url?: string
+}
+
+interface CronogramaData {
+  status: string
+  eventoAtual?: string
+  proximosEventos: CronogramaEvento[]
+  publicacoes: CronogramaEvento[]
+  erro?: string
+}
+
 export default function Dashboard() {
   const [editais, setEditais]     = useState<Edital[]>([])
   const [loading, setLoading]     = useState(false)
-  const [tab, setTab]             = useState<'abertos' | 'previstos' | 'todos'>('abertos')
+  const [tab, setTab]             = useState<'abertos' | 'previstos' | 'andamento' | 'todos'>('abertos')
   const [categoria, setCategoria] = useState('Todas')
   const [nivel, setNivel]         = useState('Todos')
   const [fonte, setFonte]         = useState('Todas')
+  const [banca, setBanca]         = useState('Todas')
   const [busca, setBusca]         = useState('')
   const [rodando, setRodando]         = useState(false)
   const [carregandoHist, setCarregandoHist] = useState(false)
   const [ultimaExec, setUltimaExec]   = useState('')
+  const [modalEdital, setModalEdital] = useState<Edital | null>(null)
+  const [cronograma, setCronograma]   = useState<CronogramaData | null>(null)
+  const [carregandoCrono, setCarregandoCrono] = useState(false)
 
   const carregar = async () => {
     setLoading(true)
@@ -80,13 +102,20 @@ export default function Dashboard() {
     if (categoria !== 'Todas') params.set('categoria', categoria)
     if (nivel !== 'Todos')     params.set('nivel', nivel)
     if (fonte !== 'Todas')     params.set('fonte', fonte)
+    if (banca !== 'Todas')     params.set('banca', banca)
     if (busca.trim())          params.set('q', busca.trim())
-    if (tab !== 'todos')       params.set('status', tab === 'abertos' ? 'aberto' : 'previsto')
+    if (tab !== 'todos')       params.set('status', tab === 'abertos' ? 'aberto' : tab === 'previstos' ? 'previsto' : 'em_andamento')
     params.set('limit', '200')
 
-    const res  = await fetch(`/api/editais?${params}`)
-    const data = await res.json()
-    setEditais(data.editais || [])
+    try {
+      const res  = await fetch(`/api/editais?${params}`)
+      if (!res.ok) throw new Error(`Erro ${res.status}`)
+      const data = await res.json()
+      setEditais(data.editais || [])
+    } catch (err) {
+      setUltimaExec(`❌ Erro ao carregar editais: ${err instanceof Error ? err.message : 'erro desconhecido'}`)
+      setEditais([])
+    }
     setLoading(false)
   }
 
@@ -119,11 +148,27 @@ export default function Dashboard() {
     carregar()
   }
 
-  useEffect(() => { carregar() }, [tab, categoria, nivel, fonte])
+  const abrirDetalhes = async (edital: Edital) => {
+    setModalEdital(edital)
+    setCronograma(null)
+    if (!edital.banca || !edital.url) return
+    setCarregandoCrono(true)
+    try {
+      const res = await fetch(`/api/detalhes?url=${encodeURIComponent(edital.url)}&banca=${encodeURIComponent(edital.banca)}&titulo=${encodeURIComponent(edital.titulo)}`)
+      const data = await res.json()
+      setCronograma(data)
+    } catch {
+      setCronograma({ status: 'erro', proximosEventos: [], publicacoes: [], erro: 'Erro ao carregar detalhes' })
+    }
+    setCarregandoCrono(false)
+  }
 
-  const abertos   = editais.filter(e => e.status === 'aberto')
-  const previstos = editais.filter(e => e.status === 'previsto')
-  const exibidos  = tab === 'abertos' ? abertos : tab === 'previstos' ? previstos : editais
+  useEffect(() => { carregar() }, [tab, categoria, nivel, fonte, banca, busca])
+
+  const abertos    = editais.filter(e => e.status === 'aberto')
+  const previstos  = editais.filter(e => e.status === 'previsto')
+  const andamento  = editais.filter(e => e.status === 'em_andamento')
+  const exibidos   = tab === 'abertos' ? abertos : tab === 'previstos' ? previstos : tab === 'andamento' ? andamento : editais
 
   // Agrupar previstos por categoria para a seção de tendências
   const tendencias = previstos.reduce((acc, e) => {
@@ -167,6 +212,7 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
           {[
             { label: 'Editais Abertos',  valor: abertos.length,   cor: '#166534', bg: '#dcfce7', icon: '🟢' },
+            { label: 'Em Andamento',     valor: andamento.length, cor: '#1e40af', bg: '#dbeafe', icon: '🔵' },
             { label: 'Previstos 2026',   valor: previstos.length, cor: '#713f12', bg: '#fef9c3', icon: '🟡' },
             { label: 'Total Coletado',   valor: editais.length,   cor: '#1e40af', bg: '#dbeafe', icon: '📊' },
             { label: 'Fontes Ativas',    valor: 4,                cor: '#5b21b6', bg: '#ede9fe', icon: '📡' },
@@ -198,7 +244,8 @@ export default function Dashboard() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-          <TabBtn label="🟢 Abertos"      ativo={tab === 'abertos'}   count={abertos.length}   onClick={() => setTab('abertos')} />
+          <TabBtn label="🟢 Abertos"       ativo={tab === 'abertos'}   count={abertos.length}   onClick={() => setTab('abertos')} />
+          <TabBtn label="🔵 Em Andamento" ativo={tab === 'andamento'} count={andamento.length} onClick={() => setTab('andamento')} />
           <TabBtn label="🟡 Previstos"    ativo={tab === 'previstos'} count={previstos.length} onClick={() => setTab('previstos')} />
           <TabBtn label="📋 Todos"        ativo={tab === 'todos'}                              onClick={() => setTab('todos')} />
         </div>
@@ -215,6 +262,7 @@ export default function Dashboard() {
             { label: 'Categoria', value: categoria, set: setCategoria, opts: CATEGORIAS },
             { label: 'Nível',     value: nivel,     set: setNivel,     opts: NIVEIS     },
             { label: 'Fonte',     value: fonte,     set: setFonte,     opts: FONTES     },
+            { label: 'Banca',     value: banca,     set: setBanca,     opts: BANCAS     },
           ].map(f => (
             <div key={f.label}>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '0.78rem', color: '#374151', marginBottom: '0.3rem' }}>{f.label}</label>
@@ -228,8 +276,8 @@ export default function Dashboard() {
             style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '0.55rem 1.1rem', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>
             Filtrar
           </button>
-          {(categoria !== 'Todas' || nivel !== 'Todos' || fonte !== 'Todas' || busca) && (
-            <button onClick={() => { setCategoria('Todas'); setNivel('Todos'); setFonte('Todas'); setBusca('') }}
+          {(categoria !== 'Todas' || nivel !== 'Todos' || fonte !== 'Todas' || banca !== 'Todas' || busca) && (
+            <button onClick={() => { setCategoria('Todas'); setNivel('Todos'); setFonte('Todas'); setBanca('Todas'); setBusca('') }}
               style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '0.55rem 0.85rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.875rem' }}>
               ✕ Limpar
             </button>
@@ -253,12 +301,20 @@ export default function Dashboard() {
                       <span style={{ background: st.bg, color: st.color, padding: '0.1rem 0.55rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700 }}>{st.label}</span>
                       <span style={{ fontSize: '0.72rem', color: '#9ca3af' }}>{FONTE_ICONE[e.fonte] || '🌐'} {e.fonte}</span>
                     </div>
-                    <a href={e.url} target="_blank" rel="noopener noreferrer"
-                      style={{ fontWeight: 700, fontSize: '0.92rem', color: '#1e1b4b', textDecoration: 'none', lineHeight: 1.4, display: 'block' }}>
-                      {e.titulo}
-                    </a>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <a href={e.url} target="_blank" rel="noopener noreferrer"
+                        style={{ fontWeight: 700, fontSize: '0.92rem', color: '#1e1b4b', textDecoration: 'none', lineHeight: 1.4 }}>
+                        {e.titulo}
+                      </a>
+                      {e.banca && (
+                        <button onClick={() => abrirDetalhes(e)}
+                          style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.15rem 0.6rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          📋 Ver cronograma
+                        </button>
+                      )}
+                    </div>
                     {e.orgao && e.orgao !== 'Não identificado' && (
-                      <p style={{ fontSize: '0.78rem', color: '#6b7280', margin: '0.2rem 0 0' }}>🏛️ {e.orgao} · {e.nivel}</p>
+                      <p style={{ fontSize: '0.78rem', color: '#6b7280', margin: '0.2rem 0 0' }}>🏛️ {e.orgao} · {e.nivel}{e.banca ? ` · Banca: ${e.banca}` : ''}</p>
                     )}
                     {e.resumo && (
                       <p style={{ fontSize: '0.78rem', color: '#374151', margin: '0.3rem 0 0', lineHeight: 1.5 }}>
@@ -282,6 +338,115 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Modal de detalhes */}
+      {modalEdital && (
+        <div onClick={() => setModalEdital(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 16, maxWidth: 700, width: '100%', maxHeight: '90vh', overflow: 'auto', padding: '1.5rem 2rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0 0 0.25rem', color: '#1e1b4b' }}>{modalEdital.titulo}</h2>
+                <p style={{ fontSize: '0.8rem', color: '#6b7280', margin: 0 }}>
+                  {modalEdital.orgao && modalEdital.orgao !== 'Não identificado' ? `🏛️ ${modalEdital.orgao} · ` : ''}
+                  Banca: {modalEdital.banca || 'N/A'} · {modalEdital.nivel}
+                </p>
+              </div>
+              <button onClick={() => setModalEdital(null)}
+                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9ca3af', padding: '0.25rem' }}>
+                ✕
+              </button>
+            </div>
+
+            <a href={modalEdital.url} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'inline-block', background: '#1e1b4b', color: '#fff', padding: '0.5rem 1rem', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+              🔗 Abrir página oficial
+            </a>
+
+            {carregandoCrono && (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>⏳ Carregando cronograma...</div>
+            )}
+
+            {!carregandoCrono && cronograma && cronograma.erro && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '1rem', fontSize: '0.85rem', color: '#991b1b', marginBottom: '1rem' }}>
+                ⚠️ {cronograma.erro}
+              </div>
+            )}
+
+            {!carregandoCrono && cronograma && (
+              <>
+                {/* Status badge */}
+                <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.82rem', color: '#374151' }}>Status:</span>
+                  {(() => {
+                    const st = STATUS_STYLE[cronograma.status] || STATUS_STYLE.encerrado
+                    return <span style={{ background: st.bg, color: st.color, padding: '0.2rem 0.75rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 700 }}>{st.label}</span>
+                  })()}
+                </div>
+
+                {/* Publicações / Documentos */}
+                {cronograma.publicacoes.length > 0 && (
+                  <div style={{ marginBottom: '1.25rem' }}>
+                    <h3 style={{ fontWeight: 700, fontSize: '0.9rem', color: '#374151', marginBottom: '0.5rem' }}>📄 Publicações</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {cronograma.publicacoes.map((p, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', background: '#f8fafc', padding: '0.45rem 0.85rem', borderRadius: 8, fontSize: '0.82rem' }}>
+                          <div style={{ flex: 1 }}>
+                            {p.url ? (
+                              <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'none', fontWeight: 600 }}>
+                                {p.evento}
+                              </a>
+                            ) : (
+                              <span style={{ color: '#374151' }}>{p.evento}</span>
+                            )}
+                          </div>
+                          {p.data && (
+                            <span style={{ color: '#6b7280', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                              {new Date(p.data).toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Próximos eventos */}
+                {cronograma.proximosEventos.length > 0 && (
+                  <div>
+                    <h3 style={{ fontWeight: 700, fontSize: '0.9rem', color: '#374151', marginBottom: '0.5rem' }}>📅 Cronograma</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {cronograma.proximosEventos.map((e, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', background: e.tipo === 'prazo' ? '#fef9c3' : '#f8fafc', padding: '0.45rem 0.85rem', borderRadius: 8, fontSize: '0.82rem' }}>
+                          <span style={{ color: '#374151', fontWeight: 600 }}>{e.evento}</span>
+                          {e.data && (
+                            <span style={{ color: '#6b7280', whiteSpace: 'nowrap' }}>
+                              {new Date(e.data).toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {cronograma.publicacoes.length === 0 && cronograma.proximosEventos.length === 0 && !cronograma.erro && (
+                  <div style={{ textAlign: 'center', padding: '1.5rem', color: '#9ca3af', fontSize: '0.85rem' }}>
+                    Nenhum dado de cronograma encontrado nesta página.
+                  </div>
+                )}
+              </>
+            )}
+
+            {!carregandoCrono && !cronograma && (
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: '#9ca3af', fontSize: '0.85rem' }}>
+                Esta fonte não possui informações de cronograma disponíveis.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <footer style={{ textAlign: 'center', padding: '1.5rem', fontSize: '0.72rem', color: '#9ca3af', borderTop: '1px solid #e5e7eb', marginTop: '2rem' }}>
         © {new Date().getFullYear()} Msdos Informática Ltda — Monitor de Editais &nbsp;·&nbsp; LGPD Lei nº 13.709/2018

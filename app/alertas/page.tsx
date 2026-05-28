@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 
-const AREAS = ['TI / Tecnologia', 'Saúde', 'Educação', 'Administrativo', 'Jurídico', 'Engenharia', 'Segurança Pública', 'Geral']
+const AREAS = ['TI / Tecnologia', 'Saúde', 'Educação', 'Administrativo', 'Jurídico', 'Engenharia', 'Segurança Pública', 'Fiscal / Receita', 'Concurso Militar', 'Geral']
 const NIVEIS = ['federal', 'estadual', 'municipal']
 
 interface AlertaConfig {

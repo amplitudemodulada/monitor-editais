@@ -44,6 +44,7 @@ export async function buscarEditalLexml(pagina = 1, ano = new Date().getFullYear
       data_publicacao: dataRaw,
       url,
       categoria:       detectarCategoria(titulo, resumo),
+      banca:           '',
       resumo:          resumo.slice(0, 500),
       palavras_chave:  [],
       nivel:           inferirNivel(titulo),

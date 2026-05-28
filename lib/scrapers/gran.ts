@@ -23,6 +23,7 @@ async function scrapePagina(url: string, status: Edital['status']): Promise<Edit
       data_publicacao: new Date().toISOString().split('T')[0],
       url:             href.startsWith('http') ? href : `https://www.grancursosonline.com.br${href}`,
       categoria:       detectarCategoria(titulo, ''),
+      banca:           '',
       resumo:          '',
       palavras_chave:  [],
       nivel:           inferirNivel(titulo),
@@ -35,13 +36,15 @@ async function scrapePagina(url: string, status: Edital['status']): Promise<Edit
 }
 
 export async function scrapeGran(): Promise<Edital[]> {
-  const [abertos, previstos] = await Promise.allSettled([
+  const [abertos, previstos, blog] = await Promise.allSettled([
     scrapePagina('https://www.grancursosonline.com.br/blog/concursos-abertos/', 'aberto'),
     scrapePagina('https://blog.grancursosonline.com.br/concursos-previstos-2026/', 'previsto'),
+    scrapePagina('https://blog.grancursosonline.com.br/', 'aberto'),
   ])
 
   return [
     ...(abertos.status   === 'fulfilled' ? abertos.value   : []),
     ...(previstos.status === 'fulfilled' ? previstos.value : []),
+    ...(blog.status      === 'fulfilled' ? blog.value      : []),
   ]
 }

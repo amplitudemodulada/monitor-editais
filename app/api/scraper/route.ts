@@ -3,6 +3,7 @@ import { buscarEditalLexml }  from '@/lib/lexml'
 import { scrapeTodasFontes } from '@/lib/scrapers'
 import { supabase }          from '@/lib/supabase'
 import { processarAlertas }  from '@/lib/alertas'
+import { atualizarStatusEditais } from '@/lib/atualizar-status'
 import type { Edital }       from '@/lib/supabase'
 
 export const maxDuration = 60 // Vercel Pro; no Hobby limita em 10s
@@ -10,13 +11,30 @@ export const maxDuration = 60 // Vercel Pro; no Hobby limita em 10s
 async function salvarLote(lista: Edital[]) {
   let inseridos = 0, duplicados = 0, erros = 0
   const novos: Edital[] = []
+  let colunaBancaFaltando = false
 
   for (const edital of lista) {
     const { data, error } = await supabase
       .from('editais')
       .upsert(edital, { onConflict: 'url', ignoreDuplicates: true })
       .select('id')
-    if (error)        { erros++;     continue }
+    if (error) {
+      // Se for erro de coluna banca não existir, tenta sem o campo
+      if (!colunaBancaFaltando && (error.message?.includes('banca') || error.code === '42703')) {
+        colunaBancaFaltando = true
+        const { banca: _, ...semBanca } = edital
+        const { data: d2, error: e2 } = await supabase
+          .from('editais')
+          .upsert(semBanca as any, { onConflict: 'url', ignoreDuplicates: true })
+          .select('id')
+        if (e2) { erros++; continue }
+        if (d2?.length) { inseridos++; novos.push({ ...edital, id: d2[0].id }) }
+        else { duplicados++ }
+      } else {
+        erros++; continue
+      }
+      continue
+    }
     if (data?.length) { inseridos++; novos.push({ ...edital, id: data[0].id }) }
     else              { duplicados++ }
   }
@@ -70,6 +88,9 @@ export async function POST(req: NextRequest) {
     const editaisNovos    = [lexmlSalvo, ...sitesSalvos].flatMap(r => r.novos)
     const alertasEnviados = await processarAlertas(editaisNovos).catch(() => 0)
 
+    // Atualiza status dos editais analisando as páginas das bancas
+    const { atualizados: statusAtualizados } = await atualizarStatusEditais(20).catch(() => ({ atualizados: 0 }))
+
     try {
       await supabase.from('scraper_log').insert({
         inseridos: totalInseridos, duplicados: totalDuplic,
@@ -83,6 +104,7 @@ export async function POST(req: NextRequest) {
       totalDuplic,
       totalErros,
       alertasEnviados,
+      statusAtualizados,
       relatorio,
       duracaoMs:   Date.now() - inicio,
       executadoEm: new Date().toISOString(),
