@@ -47,7 +47,7 @@ interface ScraperLog {
 const DATA_DIR = join(process.cwd(), 'public', 'data')
 
 function filePath(name: string) {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
+  try { if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true }) } catch { /* RO */ }
   return join(DATA_DIR, name)
 }
 
@@ -61,7 +61,9 @@ function lerJson<T>(name: string, fallback: T): T {
 }
 
 function escreverJson<T>(name: string, data: T) {
-  writeFileSync(filePath(name), JSON.stringify(data, null, 2), 'utf-8')
+  try {
+    writeFileSync(filePath(name), JSON.stringify(data, null, 2), 'utf-8')
+  } catch { /* RO — Vercel serverless não permite escrita */ }
 }
 
 // ----- Editais -----
