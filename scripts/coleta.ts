@@ -14,10 +14,17 @@ async function salvarLote(lista: any[], fonte: string) {
         .from('editais')
         .upsert(edital, { onConflict: 'url', ignoreDuplicates: true })
         .select('id')
-      if (error) { err++; continue }
+      if (error) {
+        if (err === 0) console.log(`ERRO upsert (${fonte}):`, error.message)
+        err++
+        continue
+      }
       if (data?.length) ins++
       else dup++
-    } catch { err++ }
+    } catch (e: any) {
+      if (err === 0) console.log(`ERRO catch (${fonte}):`, e.message)
+      err++
+    }
   }
   return { fonte, coletados: lista.length, inseridos: ins, duplicados: dup, erros: err }
 }
@@ -26,6 +33,15 @@ async function main() {
   const inicio = Date.now()
   const relatorio: any[] = []
   const todosNovos: any[] = []
+
+  // Teste de conexão Supabase
+  try {
+    const { error: testErr } = await supabase.from('editais').select('id').limit(1)
+    if (testErr) console.log('ERRO Supabase:', testErr.message)
+    else console.log('Supabase OK')
+  } catch (e: any) {
+    console.log('ERRO Supabase conexao:', e.message)
+  }
 
   for (let p = 1; p <= 3; p++) {
     try {
