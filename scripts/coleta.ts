@@ -8,6 +8,7 @@ const supabase = getSupabase()
 
 async function salvarLote(lista: any[], fonte: string) {
   let ins = 0, dup = 0, err = 0
+  let colunaBancaFaltando = false
   for (const edital of lista) {
     try {
       const { data, error } = await supabase
@@ -15,8 +16,20 @@ async function salvarLote(lista: any[], fonte: string) {
         .upsert(edital, { onConflict: 'url', ignoreDuplicates: true })
         .select('id')
       if (error) {
-        if (err === 0) console.log(`ERRO upsert (${fonte}):`, error.message)
-        err++
+        if (!colunaBancaFaltando && (error.message?.includes('banca') || (error as any).code === '42703')) {
+          colunaBancaFaltando = true
+          const { banca: _, ...semBanca } = edital
+          const { data: d2, error: e2 } = await supabase
+            .from('editais')
+            .upsert(semBanca, { onConflict: 'url', ignoreDuplicates: true })
+            .select('id')
+          if (e2) { err++; continue }
+          if (d2?.length) ins++
+          else dup++
+        } else {
+          if (err === 0) console.log(`ERRO upsert (${fonte}):`, error.message)
+          err++
+        }
         continue
       }
       if (data?.length) ins++
