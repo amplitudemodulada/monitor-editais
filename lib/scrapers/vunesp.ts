@@ -15,7 +15,7 @@ const HEADERS = {
 // VUNESP is blocked by Akamai CDN — try their concursos page with realistic headers
 async function tryVunespDirect(): Promise<Edital[]> {
   const { data } = await axios.get('https://www.vunesp.com.br/concursos', {
-    timeout: 10000,
+    timeout: 6000,
     headers: HEADERS,
   })
 

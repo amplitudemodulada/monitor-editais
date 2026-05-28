@@ -8,7 +8,7 @@ const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Apple
 export async function scrapeFCC(): Promise<Edital[]> {
   // FCC uses ISO-8859-1 — request as arraybuffer and decode manually
   const resp = await axios.get('https://www.fcc.org.br/fcc/concursos-e-selecoes/', {
-    timeout: 8000,
+    timeout: 6000,
     headers: HEADERS,
     responseType: 'arraybuffer',
   })

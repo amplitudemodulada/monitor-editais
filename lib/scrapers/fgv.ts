@@ -7,7 +7,7 @@ const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Apple
 
 async function scrapePaginaFGV(page: number, vistos: Set<string>): Promise<Edital[]> {
   const { data } = await axios.get('https://conhecimento.fgv.br/concursos', {
-    timeout: 10000,
+    timeout: 5000,
     headers: HEADERS,
     params: { page },
   })
@@ -57,14 +57,15 @@ export async function scrapeFGV(): Promise<Edital[]> {
   const vistos = new Set<string>()
   const todos: Edital[] = []
 
-  // O site tem 13 páginas (0-12). Percorre até encontrar uma página vazia.
-  for (let page = 0; page < 20; page++) {
-    try {
-      const concursos = await scrapePaginaFGV(page, vistos)
-      if (concursos.length === 0) break
-      todos.push(...concursos)
-    } catch {
-      break
+  // Páginas em paralelo (0-12), deduplica por URL
+  const pages = Array.from({ length: 20 }, (_, i) => i)
+  const results = await Promise.allSettled(
+    pages.map(page => scrapePaginaFGV(page, vistos))
+  )
+
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.length > 0) {
+      todos.push(...r.value)
     }
   }
 

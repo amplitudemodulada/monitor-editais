@@ -6,7 +6,7 @@ import { detectarCategoria, extrairOrgao, inferirNivel } from '../classificador'
 const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0' }
 
 async function scrapePagina(url: string, status: Edital['status']): Promise<Edital[]> {
-  const { data } = await axios.get(url, { timeout: 8000, headers: HEADERS })
+  const { data } = await axios.get(url, { timeout: 6000, headers: HEADERS })
   const $ = load(data)
   const resultado: Edital[] = []
   const vistos = new Set<string>()

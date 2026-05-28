@@ -49,7 +49,7 @@ function extrairDataProva(texto: string): string {
 
 async function scrapeGuia(url: string): Promise<Edital | null> {
   try {
-    const { data } = await axios.get(url, { timeout: 10000, headers: HEADERS })
+    const { data } = await axios.get(url, { timeout: 7000, headers: HEADERS })
     const $ = load(data)
 
     const tituloEl = $('.detalhes-cabecalho-informacoes-texto').first()
@@ -109,7 +109,7 @@ export async function scrapeTecConcursos(): Promise<Edital[]> {
 
   try {
     // 1. Buscar homepage para coletar URLs dos guias
-    const { data } = await axios.get(BASE, { timeout: 10000, headers: HEADERS })
+    const { data } = await axios.get(BASE, { timeout: 7000, headers: HEADERS })
     const $ = load(data)
 
     const guiaUrls: string[] = []

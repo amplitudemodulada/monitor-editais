@@ -8,7 +8,7 @@ const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Apple
 // Try the main WordPress site for concurso-related content
 async function tryWordpress(): Promise<Edital[]> {
   const { data } = await axios.get('https://idecan.org.br/wp-json/wp/v2/posts', {
-    timeout: 8000,
+    timeout: 6000,
     headers: HEADERS,
     params: { per_page: 20, search: 'concurso', orderby: 'date', order: 'desc' },
   })
@@ -44,7 +44,7 @@ async function tryWordpress(): Promise<Edital[]> {
 // Try the concurso subdomain (behind Cloudflare — may fail)
 async function tryConcursoSite(): Promise<Edital[]> {
   const { data } = await axios.get('https://concurso.idecan.org.br', {
-    timeout: 8000,
+    timeout: 6000,
     headers: HEADERS,
   })
 

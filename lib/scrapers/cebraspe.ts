@@ -8,7 +8,7 @@ const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Apple
 // CEBRASPE is a React SPA — try their WordPress-based REST API
 async function tryWordpressApi(): Promise<Edital[]> {
   const { data } = await axios.get('https://www.cebraspe.org.br/wp-json/wp/v2/concursos', {
-    timeout: 8000,
+    timeout: 6000,
     headers: HEADERS,
     params: { per_page: 30, orderby: 'date', order: 'desc' },
   })
@@ -53,7 +53,7 @@ async function tryWordpressApi(): Promise<Edital[]> {
 // Fallback: scrape concursos page directly
 async function tryDirectScrape(): Promise<Edital[]> {
   const { data } = await axios.get('https://www.cebraspe.org.br/concursos', {
-    timeout: 8000,
+    timeout: 6000,
     headers: HEADERS,
   })
 

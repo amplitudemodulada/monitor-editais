@@ -15,7 +15,7 @@ const STATUS_MAP: Record<string, Edital['status']> = {
 }
 
 async function scrapePagina(statusParam: string): Promise<Edital[]> {
-  const { data } = await axios.get(`${BASE}/?status=${statusParam}`, { timeout: 10000, headers: HEADERS })
+  const { data } = await axios.get(`${BASE}/?status=${statusParam}`, { timeout: 8000, headers: HEADERS })
   const $ = load(data)
   const resultado: Edital[] = []
   const vistos = new Set<string>()
