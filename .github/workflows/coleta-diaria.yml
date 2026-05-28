@@ -1,0 +1,20 @@
+name: Coleta Diária de Editais
+
+on:
+  schedule:
+    # 11:00 UTC = 08:00 BRT
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+jobs:
+  coleta:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar API de coleta
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            --max-time 120 \
+            "https://monitor-editais-pearl.vercel.app/api/cron")
+          echo "Status HTTP: $response"
+          if [ "$response" != "200" ]; then exit 1; fi
