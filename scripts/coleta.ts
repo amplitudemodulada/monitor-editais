@@ -7,39 +7,34 @@ import { getSupabase } from '../lib/supabase'
 const supabase = getSupabase()
 
 async function salvarLote(lista: any[], fonte: string) {
-  let ins = 0, dup = 0, err = 0
-  let colunaBancaFaltando = false
-  for (const edital of lista) {
-    try {
-      const { data, error } = await supabase
-        .from('editais')
-        .upsert(edital, { onConflict: 'url', ignoreDuplicates: true })
-        .select('id')
-      if (error) {
-        if (!colunaBancaFaltando && (error.message?.includes('banca') || (error as any).code === '42703')) {
-          colunaBancaFaltando = true
-          const { banca: _, ...semBanca } = edital
-          const { data: d2, error: e2 } = await supabase
-            .from('editais')
-            .upsert(semBanca, { onConflict: 'url', ignoreDuplicates: true })
-            .select('id')
-          if (e2) { err++; continue }
-          if (d2?.length) ins++
-          else dup++
-        } else {
-          if (err === 0) console.log(`ERRO upsert (${fonte}):`, error.message)
-          err++
-        }
-        continue
+  if (!lista.length) return { fonte, coletados: 0, inseridos: 0, duplicados: 0, erros: 0 }
+
+  try {
+    const { data, error } = await supabase
+      .from('editais')
+      .upsert(lista, { onConflict: 'url', ignoreDuplicates: true })
+      .select('id')
+
+    if (error) {
+      if (error.message?.includes('banca') || (error as any).code === '42703') {
+        const semBanca = lista.map(({ banca: _, ...rest }) => rest)
+        const { data: d2, error: e2 } = await supabase
+          .from('editais')
+          .upsert(semBanca, { onConflict: 'url', ignoreDuplicates: true })
+          .select('id')
+        if (e2) return { fonte, coletados: lista.length, inseridos: 0, duplicados: 0, erros: lista.length }
+        const inseridos = d2?.length ?? 0
+        return { fonte, coletados: lista.length, inseridos, duplicados: lista.length - inseridos, erros: 0 }
       }
-      if (data?.length) ins++
-      else dup++
-    } catch (e: any) {
-      if (err === 0) console.log(`ERRO catch (${fonte}):`, e.message)
-      err++
+      return { fonte, coletados: lista.length, inseridos: 0, duplicados: 0, erros: lista.length }
     }
+
+    const inseridos = data?.length ?? 0
+    return { fonte, coletados: lista.length, inseridos, duplicados: lista.length - inseridos, erros: 0 }
+  } catch (e: any) {
+    if (process.env.LOG_ERRORS) console.log(`ERRO salvarLote (${fonte}):`, e.message)
+    return { fonte, coletados: lista.length, inseridos: 0, duplicados: 0, erros: lista.length }
   }
-  return { fonte, coletados: lista.length, inseridos: ins, duplicados: dup, erros: err }
 }
 
 async function main() {
