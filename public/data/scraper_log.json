@@ -86,5 +86,13 @@
     "status": "ok",
     "fonte": "multi",
     "executado_em": "2026-06-06T12:03:53.022Z"
+  },
+  {
+    "inseridos": 6,
+    "duplicados": 840,
+    "erros": 0,
+    "status": "ok",
+    "fonte": "multi",
+    "executado_em": "2026-06-07T12:16:07.495Z"
   }
 ]
