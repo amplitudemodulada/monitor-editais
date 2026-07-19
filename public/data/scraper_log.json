@@ -422,5 +422,13 @@
     "status": "ok",
     "fonte": "multi",
     "executado_em": "2026-07-18T11:42:58.146Z"
+  },
+  {
+    "inseridos": 52,
+    "duplicados": 776,
+    "erros": 0,
+    "status": "ok",
+    "fonte": "multi",
+    "executado_em": "2026-07-19T11:48:09.546Z"
   }
 ]
