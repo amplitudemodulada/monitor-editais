@@ -550,5 +550,13 @@
     "status": "ok",
     "fonte": "multi",
     "executado_em": "2026-08-03T13:32:58.876Z"
+  },
+  {
+    "inseridos": 18,
+    "duplicados": 845,
+    "erros": 0,
+    "status": "ok",
+    "fonte": "multi",
+    "executado_em": "2026-08-04T12:52:28.515Z"
   }
 ]
